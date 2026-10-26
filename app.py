@@ -96,7 +96,7 @@ def propose(description, filename, source):
     diff = "".join(difflib.unified_diff(source.splitlines(True), proposed.splitlines(True),
                                          fromfile=f"a/{filename}", tofile=f"b/{filename}"))
     return {"filename": filename, "proposed": proposed, "diff": diff,
-            "status": "Patch ready for review � tests not run", "model": MODEL, "usage": usage}
+            "status": "Patch ready for review · tests not run", "model": MODEL, "usage": usage}
 
 
 def check_rate_limit(client_ip):
@@ -129,7 +129,7 @@ def analyse(description, case):
     diff = "".join(difflib.unified_diff(source.splitlines(True), proposed.splitlines(True),
                                          fromfile=f"a/{filename}", tofile=f"b/{filename}"))
     return {"before": before, "after": after, "diff": diff,
-            "status": "Tests not run � isolated execution unavailable",
+            "status": "Tests not run · isolated execution unavailable",
             "model": MODEL, "usage": usage}
 
 
@@ -203,7 +203,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
-        self.send_header("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:")
+        self.send_header("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; script-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:")
         self.end_headers()
         self.wfile.write(body)
 
@@ -213,4 +213,3 @@ if __name__ == "__main__":
     host = "0.0.0.0" if HOSTED_DEMO else "127.0.0.1"
     print(f"Patchwork: http://{host}:{port}")
     ThreadingHTTPServer((host, port), Handler).serve_forever()
-
