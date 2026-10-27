@@ -1,49 +1,76 @@
 # Patchwork
+[MIT licensed](LICENSE) · [Live demo](https://patchwork-demo.onrender.com/) · NVIDIA Nemotron on Nebius Token Factory
 
-Patchwork is a review-first code repair studio. Describe a bug, choose a source file, and ask NVIDIA Nemotron to propose a focused repair. Patchwork displays the unified diff and complete replacement so you can inspect the suggestion before applying it.
+**Turn a bug report into a repair you can understand, review and take with you.**
 
-Patchwork calls NVIDIA Nemotron through Nebius Token Factory's OpenAI-compatible chat completions API. The default model is `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B`.
+Patchwork is a repair studio for students, maintainers and developers working on small codebases. A model-generated replacement alone leaves the reviewer to reconstruct its purpose. Patchwork bundles the target source, selected reference files, diagnosis, diff, syntax evidence, suggested tests and human decision into one portable review.
+
+## What works
+- Responsive landing page and dedicated studio with Overpass, Fira Sans and Fira Code typography.
+- ZIP import, pasted source, searchable project files and two built-in examples with test context.
+- Explicit context selection: up to five supporting files, 40 KB combined.
+- NVIDIA Nemotron repair generation through Nebius Token Factory.
+- Structured diagnosis, changes, risks and suggested regression tests.
+- Deterministic Python / JSON syntax checks on original and proposed source.
+- Overview, diff, replacement and suggested-test views.
+- Accept or dismiss a repair. Acceptance is blocked if the source changed or the proposed syntax fails.
+- Session review history, workspace ZIP export, unified patch export and JSON review report.
+- Hosted server key, request limits, bounded model concurrency and clear error handling.
 
 ## Run locally
+Requires Python 3.10 or newer. No Python dependencies are needed.
 
-Requires Python 3.10 or newer and a Nebius Token Factory API key with access to the configured model.
+    python app.py
 
-In PowerShell, open this folder and run:
+Open http://127.0.0.1:8000 in your browser. In Studio → Settings, enter your Nebius Token Factory secret. It stays in server memory, not browser storage. Alternatively set NEBIUS_API_KEY in the server environment. Do not commit credentials.
 
-```powershell
-python app.py
-```
+NEBIUS_MODEL defaults to nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B. If the catalogue changes, configure the exact available NVIDIA model ID in your Token Factory account.
 
-Open <http://127.0.0.1:8000>, paste your Token Factory key into the connection panel, and use a sample project or upload a ZIP. In local mode, the key stays in the server process's memory and is cleared when it stops. Set `NEBIUS_MODEL` before launching to select another model available to your account.
+The HTML depends on the Python API; opening index.html directly is not a supported way to use the app.
 
-## Deploy a public demo on Render
+## Deploy on Render
+The included render.yaml configures the existing Python service:
+1. Connect this repository as a Blueprint or Python web service.
+2. Set NEBIUS_API_KEY as a secret in Render.
+3. Set PATCHWORK_DEMO_MODE=true. Start command: python app.py.
+4. Render supplies PORT; hosted mode binds to 0.0.0.0.
+5. Verify /api/status and make a live example repair.
 
-The included `render.yaml` configures a Render web service. To deploy:
+A configured status means a key exists; it does not validate authentication. The Google Fonts stylesheet and fonts are allowed by a narrow CSP. System fonts are used if fonts cannot load.
 
-1. Push this folder to a public GitHub repository.
-2. In Render, choose **New > Blueprint** and connect the repository.
-3. When Render prompts for `NEBIUS_API_KEY`, enter the Token Factory key in the private environment-variable field. Never add the key to the repository or a browser setting.
-4. Deploy the `patchwork-demo` web service and open its generated `onrender.com` URL.
-5. Confirm `/api/status` reports the model connection, then make a sample patch request from the UI.
+## Architecture
+Browser workspace → Python API → NVIDIA Nemotron via Nebius Token Factory → structured review → parser checks → human decision → export.
 
-Hosted mode reads the API key from the service environment, hides the local key-entry form, and refuses API-key changes from the public page. Patch requests are capped per client IP per hour by `PATCHWORK_REQUESTS_PER_HOUR` (12 by default) to protect the demo credential. Uploaded project files are processed in memory and are not written to disk. Render's free web services can sleep when idle and may take about a minute to wake on the next visit.
+- GET /api/status: public configuration status and model ID, never credentials.
+- POST /api/upload: inspect a ZIP and report skipped entries.
+- POST /api/propose: send the target, bug report and chosen reference files for a repair review.
+- POST /api/export: package supported workspace files into a ZIP.
+- POST /api/config: configure a key in local mode only.
 
-To deploy manually instead of using the Blueprint, configure a Python web service with build command `pip install -r requirements.txt` and start command `python app.py`. Set `PATCHWORK_DEMO_MODE=true`, `NEBIUS_API_KEY` as a secret, and optionally `NEBIUS_MODEL`. The app binds to `0.0.0.0` and uses the `PORT` supplied by the host in hosted mode.
+The application is hosted on Render; model inference runs on Nebius Token Factory. It does not claim to use Nebius Serverless Jobs or run arbitrary code on AI Cloud.
 
-## Use Patchwork
+## Verification
+Run the offline regression suite:
 
-Choose a bundled example or upload a ZIP archive. Patchwork accepts archives up to 2 MB and inspects up to 40 UTF-8 text files of common source, configuration, and documentation types. Select the relevant file, describe expected and actual behaviour, then choose **Propose a patch**. Review the diff and replacement, then copy or download the suggested source.
+    python -m unittest test_app -v
+    node --check studio.js
 
-Uploaded source is treated as text. Patchwork does not execute uploaded code, generated code, or the bundled sample tests. Validate proposed changes in your own development environment.
+The Python suite covers structured model response validation with mocked replies, truncation, syntax failures, context budgets, archive filtering, exports, origin checks, hosted configuration and key privacy. It consumes no model credits. A successful mocked test is not evidence of a live model response.
 
-## Project structure
+## Current boundaries
+- The model proposes one target-file repair at a time. Reference files are context, not additional edit targets.
+- Uploaded/generated code and suggested regression tests are not executed. Syntax success does not prove behavioural correctness.
+- Python and JSON get parser checks. Other languages are explicitly marked unchecked.
+- ZIPs up to 2 MB; up to 40 supported text files; 300 KB per imported file, 1.5 MB total. The repair target is limited to 30 KB.
+- Export contains supported workspace files only. Binary assets, dependency folders and skipped entries are not preserved.
+- Workspace and history live in the current tab; refreshing clears them. Export before leaving.
+- Source, report and selected context are sent to Nebius for inference. Patchwork does not save uploads to server disk; consult your provider terms for provider retention.
+- This demo has no accounts or persistent project storage. Request limits are in-memory and reset on restart. Proxy deployments may share a client limit. Use an external rate-limit store before scaling.
+- Cancellation stops the browser waiting; the server's model call can still finish and consume tokens.
 
-- `app.py` serves the local or hosted UI and API, inspects ZIP uploads, and calls Nebius Token Factory.
-- `index.html` contains the responsive interface, sample selection, drag-and-drop upload, diff review, and replacement export actions.
-- `sample/` contains example source files and reference tests. Patchwork does not run those tests.
-- `render.yaml` describes the Render demo service.
+## Hackathon
+Best Apps and Agents is the proposed track for the current implementation. See [DEMO.md](DEMO.md) for a concise demonstration and judging checklist.
 
-## License
+October 27 update: rebuilt the site and studio; added selected context, structured model reviews, parser evidence, decision handling, history, ZIP/patch/report exports, archive guards, request limits and offline regression coverage. The project previously existed as a simpler single-file suggestion prototype. Describe these changes honestly in the submission if required by the submission period.
 
-MIT. See [LICENSE](LICENSE).
-
+Licensed under MIT. See LICENSE.
